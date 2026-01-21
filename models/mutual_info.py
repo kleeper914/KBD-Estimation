@@ -37,13 +37,14 @@ def linear(in_dim, out_dim, bias=True):
 
     return lin
 
+# 计算互信息下界
 def mutual_information(joint, marginal, mine_net):
     t = mine_net(joint)
     et = torch.exp(mine_net(marginal))
     mi_lb = torch.mean(t) - torch.log(torch.mean(et))
     return mi_lb, t, et
 
-
+# 训练MINE网络
 def learn_mine(batch, mine_net, ma_et, ma_rate=0.01):
     # batch is a tuple of (joint, marginal)
     joint, marginal = batch
@@ -58,7 +59,7 @@ def learn_mine(batch, mine_net, ma_et, ma_rate=0.01):
     # loss = - mi_lb
     return loss, ma_et, mi_lb
 
-
+# 从接收信号和噪声中采样联合分布和边缘分布
 def sample_batch(rec, noise):
     rec = torch.reshape(rec, shape=(-1, 1))
     noise = torch.reshape(noise, shape=(-1, 1))

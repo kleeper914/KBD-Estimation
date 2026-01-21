@@ -125,7 +125,7 @@ class NoamOpt:
         weight_decay =   0
         return weight_decay
 
-            
+# 序列转文本
 class SeqtoText:
     def __init__(self, vocb_dictionary, end_idx):
         self.reverse_word_map = dict(zip(vocb_dictionary.values(), vocb_dictionary.keys()))
@@ -144,6 +144,11 @@ class SeqtoText:
 
 
 class Channels():
+
+    def Ideal(self, Tx_sig, n_var=None):
+        """理想信道：无噪声、无衰减，信号直接通过"""
+        Rx_sig = Tx_sig
+        return Rx_sig
 
     def AWGN(self, Tx_sig, n_var):
         Rx_sig = Tx_sig + torch.normal(0, n_var, size=Tx_sig.shape).to(device)
@@ -240,14 +245,16 @@ def train_step(model, src, trg, n_var, pad, opt, criterion, channel, mi_net=None
     channel_enc_output = model.channel_encoder(enc_output)
     Tx_sig = PowerNormalize(channel_enc_output)
 
-    if channel == 'AWGN':
+    if channel == 'Ideal':
+        Rx_sig = channels.Ideal(Tx_sig, n_var)
+    elif channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
     elif channel == 'Rayleigh':
         Rx_sig = channels.Rayleigh(Tx_sig, n_var)
     elif channel == 'Rician':
         Rx_sig = channels.Rician(Tx_sig, n_var)
     else:
-        raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
+        raise ValueError("Please choose from Ideal, AWGN, Rayleigh, and Rician")
 
     channel_dec_output = model.channel_decoder(Rx_sig)
     dec_output = model.decoder(trg_inp, channel_dec_output, look_ahead_mask, src_mask)
@@ -286,14 +293,16 @@ def train_mi(model, mi_net, src, n_var, padding_idx, opt, channel):
     channel_enc_output = model.channel_encoder(enc_output)
     Tx_sig = PowerNormalize(channel_enc_output)
 
-    if channel == 'AWGN':
+    if channel == 'Ideal':
+        Rx_sig = channels.Ideal(Tx_sig, n_var)
+    elif channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
     elif channel == 'Rayleigh':
         Rx_sig = channels.Rayleigh(Tx_sig, n_var)
     elif channel == 'Rician':
         Rx_sig = channels.Rician(Tx_sig, n_var)
     else:
-        raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
+        raise ValueError("Please choose from Ideal, AWGN, Rayleigh, and Rician")
 
     joint, marginal = sample_batch(Tx_sig, Rx_sig)
     mi_lb, _, _ = mutual_information(joint, marginal, mi_net)
@@ -316,14 +325,16 @@ def val_step(model, src, trg, n_var, pad, criterion, channel):
     channel_enc_output = model.channel_encoder(enc_output)
     Tx_sig = PowerNormalize(channel_enc_output)
 
-    if channel == 'AWGN':
+    if channel == 'Ideal':
+        Rx_sig = channels.Ideal(Tx_sig, n_var)
+    elif channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
     elif channel == 'Rayleigh':
         Rx_sig = channels.Rayleigh(Tx_sig, n_var)
     elif channel == 'Rician':
         Rx_sig = channels.Rician(Tx_sig, n_var)
     else:
-        raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
+        raise ValueError("Please choose from Ideal, AWGN, Rayleigh, and Rician")
 
     channel_dec_output = model.channel_decoder(Rx_sig)
     dec_output = model.decoder(trg_inp, channel_dec_output, look_ahead_mask, src_mask)
@@ -350,14 +361,16 @@ def greedy_decode(model, src, n_var, max_len, padding_idx, start_symbol, channel
     channel_enc_output = model.channel_encoder(enc_output)
     Tx_sig = PowerNormalize(channel_enc_output)
 
-    if channel == 'AWGN':
+    if channel == 'Ideal':
+        Rx_sig = channels.Ideal(Tx_sig, n_var)
+    elif channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
     elif channel == 'Rayleigh':
         Rx_sig = channels.Rayleigh(Tx_sig, n_var)
     elif channel == 'Rician':
         Rx_sig = channels.Rician(Tx_sig, n_var)
     else:
-        raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
+        raise ValueError("Please choose from Ideal, AWGN, Rayleigh, and Rician")
             
     #channel_enc_output = model.blind_csi(channel_enc_output)
           

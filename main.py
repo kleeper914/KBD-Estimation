@@ -22,8 +22,9 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser()
 #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
 parser.add_argument('--vocab-file', default='europarl/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
-parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
+parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Ideal', type=str)
+# parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose Ideal, AWGN, Rayleigh, and Rician')
+parser.add_argument('--channel', default='Ideal', type=str, help = 'Please choose Ideal, AWGN, Rayleigh, and Rician')
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
 parser.add_argument('--d-model', default=128, type=int)
@@ -36,11 +37,16 @@ parser.add_argument('--epochs', default=80, type=int)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# 设置随机种子, 确保模型训练的可重现性
 def setup_seed(seed):
+    # 设置PyTorch随机种子
     torch.manual_seed(seed)
+    # 如果使用cuda, 设置cuda随机种子
     torch.cuda.manual_seed_all(seed)
+    # 设置numpy和Python随机种子
     np.random.seed(seed)
     random.seed(seed)
+    # 设置cudnn的确定性
     torch.backends.cudnn.deterministic = True
 
 def validate(epoch, args, net):
@@ -71,7 +77,7 @@ def train(epoch, args, net, mi_net=None):
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_data)
     pbar = tqdm(train_iterator)
-
+    # 随机生成噪声标准差
     noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
 
     for sents in pbar:

@@ -19,4 +19,4 @@ checkpoints/
 /checkpoints/deepsc-Rayleigh/* 
 
 # vscode
-/.vscode/*
+.vscode/*
