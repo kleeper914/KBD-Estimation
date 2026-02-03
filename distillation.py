@@ -35,7 +35,7 @@ parser.add_argument('--student-checkpoint', default='', type=str,
 parser.add_argument('--output-path', default='checkpoints/distillation', type=str,
                     help='Path to save distilled student model')
 parser.add_argument('--channel', default='Rayleigh', type=str, 
-                    help='Please choose AWGN, Rayleigh, and Rician')
+                    help='Please choose Ideal, AWGN, Rayleigh, and Rician')
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
 parser.add_argument('--d-model', default=128, type=int)
@@ -147,14 +147,16 @@ def forward_pass(model, src, trg, padding_idx, channel, n_var=0.1, return_interm
     Tx_sig = PowerNormalize(channel_enc_output)
     
     # 通道模拟
-    if channel == 'AWGN':
+    if channel == 'Ideal':
+        Rx_sig = channels.Ideal(Tx_sig, n_var)
+    elif channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
     elif channel == 'Rayleigh':
         Rx_sig = channels.Rayleigh(Tx_sig, n_var)
     elif channel == 'Rician':
         Rx_sig = channels.Rician(Tx_sig, n_var)
     else:
-        raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
+        raise ValueError("Please choose from Ideal, AWGN, Rayleigh, and Rician")
     
     # Decoder
     channel_dec_output = model.channel_decoder(Rx_sig)
@@ -452,7 +454,7 @@ def train_distillation(args):
     
     # 加载训练数据
     print("\n=== Loading Training Data ===")
-    train_eur = EurDataset('train')
+    train_eur = EurDataset('distill')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_data)
     

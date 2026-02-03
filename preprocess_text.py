@@ -24,6 +24,7 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser()
 parser.add_argument('--input-data-dir', default='europarl/en', type=str)
 parser.add_argument('--output-train-dir', default='europarl/train_data.pkl', type=str)
+parser.add_argument('--output-distill-dir', default='europarl/distill_data.pkl', type=str)
 parser.add_argument('--output-test-dir', default='europarl/test_data.pkl', type=str)
 parser.add_argument('--output-vocab', default='europarl/vocab.json', type=str)
 
@@ -146,6 +147,7 @@ def main(args):
     data_dir = '/import/antennas/Datasets/hx301/'
     args.input_data_dir = data_dir + args.input_data_dir
     args.output_train_dir = data_dir + args.output_train_dir
+    args.output_distill_dir = data_dir + args.output_distill_dir
     args.output_test_dir = data_dir + args.output_test_dir
     args.output_vocab = data_dir + args.output_vocab
 
@@ -189,11 +191,17 @@ def main(args):
 
 
     print('Writing Data')
-    train_data = results[: round(len(results) * 0.9)]
+    train_full = results[: round(len(results) * 0.9)]
     test_data = results[round(len(results) * 0.9):]
+
+    split_idx = round(len(train_full) * 0.8)
+    train_data = train_full[:split_idx]
+    distill_data = train_full[split_idx:]
 
     with open(args.output_train_dir, 'wb') as f:
         pickle.dump(train_data, f)
+    with open(args.output_distill_dir, 'wb') as f:
+        pickle.dump(distill_data, f)
     with open(args.output_test_dir, 'wb') as f:
         pickle.dump(test_data, f)
 

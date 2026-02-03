@@ -20,3 +20,6 @@ checkpoints/
 
 # vscode
 .vscode/*
+
+# logs
+logs/
