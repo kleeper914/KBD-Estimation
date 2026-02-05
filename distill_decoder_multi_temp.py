@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 from dataset import EurDataset, collate_data
 from models.transceiver import DeepSC
@@ -36,14 +37,32 @@ def freeze_base_modules(model: DeepSC):
 
 
 def build_models(args, vocab_size):
+    def _load_checkpoint_with_pe_resize(model, checkpoint_path):
+        state = torch.load(checkpoint_path, map_location=kd.device)
+        model_state = model.state_dict()
+
+        for key in ["encoder.pos_encoding.pe", "decoder.pos_encoding.pe"]:
+            if key in state and key in model_state:
+                ckpt_pe = state[key]
+                cur_pe = model_state[key]
+                if ckpt_pe.shape != cur_pe.shape:
+                    if ckpt_pe.size(1) >= cur_pe.size(1):
+                        state[key] = ckpt_pe[:, :cur_pe.size(1), :]
+                    else:
+                        padded = cur_pe.clone()
+                        padded[:, :ckpt_pe.size(1), :] = ckpt_pe
+                        state[key] = padded
+
+        model.load_state_dict(state, strict=False)
+
     # Teacher
     teacher_model = DeepSC(
         args.num_layers, vocab_size, vocab_size,
-        args.MAX_LENGTH, args.MAX_LENGTH, args.d_model,
+        vocab_size, vocab_size, args.d_model,
         args.num_heads, args.dff, 0.1
     )
     if os.path.exists(args.teacher_checkpoint):
-        teacher_model.load_state_dict(torch.load(args.teacher_checkpoint, map_location=kd.device))
+        _load_checkpoint_with_pe_resize(teacher_model, args.teacher_checkpoint)
     else:
         teacher_model = initNetParams(teacher_model)
     teacher_model = teacher_model.to(kd.device)
@@ -52,13 +71,13 @@ def build_models(args, vocab_size):
     # Student
     student_model = DeepSC(
         args.student_layers, vocab_size, vocab_size,
-        args.MAX_LENGTH, args.MAX_LENGTH, args.d_model,
+        vocab_size, vocab_size, args.d_model,
         args.num_heads, args.dff, 0.1
     )
 
     loaded_student = False
     if args.use_base_student and os.path.exists(args.teacher_checkpoint) and args.student_layers == args.num_layers:
-        student_model.load_state_dict(torch.load(args.teacher_checkpoint, map_location=kd.device))
+        _load_checkpoint_with_pe_resize(student_model, args.teacher_checkpoint)
         loaded_student = True
     elif args.use_base_student and args.student_layers != args.num_layers:
         print(
@@ -66,7 +85,7 @@ def build_models(args, vocab_size):
             "skip loading teacher checkpoint for student."
         )
     elif args.student_checkpoint and os.path.exists(args.student_checkpoint):
-        student_model.load_state_dict(torch.load(args.student_checkpoint, map_location=kd.device))
+        _load_checkpoint_with_pe_resize(student_model, args.student_checkpoint)
         loaded_student = True
 
     if not loaded_student:
@@ -120,7 +139,8 @@ def run_single_temperature(args):
 
         noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))[0]
 
-        for sents in train_iterator:
+        pbar = tqdm(train_iterator, desc=f"T={args.temperature} Epoch {epoch+1}/{args.epochs}")
+        for sents in pbar:
             sents = sents.to(kd.device)
             loss, task_loss, distill_loss = kd.distillation_step(
                 student_model,
@@ -140,6 +160,12 @@ def run_single_temperature(args):
             total_task_loss += task_loss
             total_distill_loss += distill_loss
             batch_count += 1
+
+            pbar.set_postfix({
+                "loss": f"{loss:.4f}",
+                "task": f"{task_loss:.4f}",
+                "distill": f"{distill_loss:.4f}",
+            })
 
         avg_loss = total_loss / batch_count
         avg_task_loss = total_task_loss / batch_count
@@ -187,6 +213,9 @@ def run_single_temperature(args):
             args.hybrid_output,
         )
 
+    if torch.is_tensor(best_loss):
+        best_loss = float(best_loss.item())
+
     config = {
         "temperature": args.temperature,
         "distill_weight": args.distill_weight,
@@ -224,10 +253,10 @@ def run_single_temperature(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vocab-file", default="europarl/vocab.json", type=str)
-    parser.add_argument("--teacher-checkpoint", default="checkpoints/deepsc-Rayleigh/model.pt", type=str)
+    parser.add_argument("--teacher-checkpoint", default="checkpoints/deepsc-Ideal/model.pt", type=str)
     parser.add_argument("--student-checkpoint", default="", type=str)
     parser.add_argument("--output-root", default="checkpoints/decoder_temp_multi", type=str)
-    parser.add_argument("--channel", default="Rayleigh", type=str)
+    parser.add_argument("--channel", default="Ideal", type=str)
     parser.add_argument("--MAX-LENGTH", default=30, type=int)
     parser.add_argument("--MIN-LENGTH", default=4, type=int)
     parser.add_argument("--d-model", default=128, type=int)
@@ -235,7 +264,7 @@ def main():
     parser.add_argument("--num-layers", default=4, type=int)
     parser.add_argument("--num-heads", default=8, type=int)
     parser.add_argument("--batch-size", default=128, type=int)
-    parser.add_argument("--epochs", default=80, type=int)
+    parser.add_argument("--epochs", default=10, type=int)
     parser.add_argument("--temperatures", default="1.0,2.0,4.0,6.0,8.0", type=str)
     parser.add_argument("--distill-weight", default=0.7, type=float)
     parser.add_argument("--lr", default=1e-4, type=float)
@@ -262,7 +291,7 @@ def main():
         hybrid_output = os.path.join(output_path, "hybrid_decoder_distilled.pt")
 
         run_args = argparse.Namespace(
-            vocab_file=args.vocab_file,
+            vocab_file='/mnt/workspace/KBD-Estimation/data/' + args.vocab_file,
             teacher_checkpoint=args.teacher_checkpoint,
             student_checkpoint=args.student_checkpoint,
             output_path=output_path,
