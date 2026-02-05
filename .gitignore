@@ -23,3 +23,7 @@ checkpoints/
 
 # logs
 logs/
+
+# docs
+Adversarial_task_doc/*
+Distillation_doc/*
